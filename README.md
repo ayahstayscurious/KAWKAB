@@ -1,132 +1,114 @@
-# 🪐 KAWKAB — كوكب
-### Planet Encyclopedia Embedded Card Reader
+# KAWKAB — Planet Encyclopedia Embedded Card Reader
 
-> An AI-enhanced educational embedded system with analog card sensing, multi-sensor acquisition, and real-time PC dashboard.  
-> Built for **ECCE4227: Embedded Systems** · Sultan Qaboos University · Spring 2026
+> **كوكب** (*kawkab*) — Arabic for "planet"
 
----
+Insert a planet trading card → the system identifies it and responds with a planet-specific LCD message, RGB color, musical tone, and a live PC dashboard with a 3D view and AI assistant.
 
-## ✨ What is KAWKAB?
-
-KAWKAB (Arabic: كوكب, meaning *"planet"*) is a microcontroller-based interactive educational device. Insert a physical planet trading card → the system reads its unique analog signature → and responds with light, sound, text, and an AI-powered PC dashboard.
-
-A child (or a curious adult) holds a card of Saturn, slides it in, and instantly gets its colour, its tone, its facts — and can ask an AI anything about it. In English or Arabic.
+🎬 **[Watch the demo on YouTube](https://www.youtube.com/watch?v=02pbbkqU8Yo)**
 
 ---
 
-## 🔧 Hardware Overview
+## The Idea
 
-| Component | Role |
-|---|---|
-| **ATmega8** (DIP-28) | Main MCU @ 8 MHz internal oscillator |
-| **Resistor Divider** (ADC0 / PC0) | Planet identification via unique card resistor |
-| **LDR Sensor** (ADC1 / PC1) | Card insertion detection (light-blocking) |
-| **16×2 LCD HD44780** | Displays planet name + key fact |
-| **Passive Buzzer** (OC2 / PB3) | Unique PWM tone per planet |
-| **RGB LEDs** (PB0–PB2) | Planet colour coding |
-| **UART @ 9600 baud** (PD1) | Streams telemetry to PC dashboard |
-| **USB-to-TTL converter** | Bridges MCU UART to PC |
-| **9V battery + 7805** | Regulated 5V supply |
+Each planet card has a unique resistor embedded in it. When inserted, it completes a voltage divider that the ATmega8 reads via ADC. The microcontroller then simultaneously drives four outputs: LCD text, an RGB LED color, a tone sequence, and a UART packet that feeds a browser-based dashboard.
+
+The cards are printed on card stock with copper-tape contacts — designed to feel like collectibles rather than components.
 
 ---
 
-## 🃏 Planet Card Identification
+## Hardware Overview
 
-Each card carries a unique fixed resistor bridging two copper-tape contacts. A 10 kΩ pull-up forms a voltage divider — the midpoint voltage is read by ADC0 and mapped to a planet.
+| Part | Role |
+|------|------|
+| ATmega8 @ 8 MHz | Main MCU |
+| Resistor-coded card + 10 kΩ pull-up (ADC0) | Planet identification |
+| LDR + 10 kΩ divider (ADC1) | Card insertion detection |
+| 16×2 LCD — 4-bit mode | Planet name + fact |
+| RGB LED (common cathode, 330 Ω/ch) | Planet color |
+| Passive buzzer (PB3/OC2, 100 Ω series) | Musical tone signature |
+| USB-to-TTL adapter | UART → PC |
 
-| # | Planet | Resistor | VADC0 (V) | ADC Count | Threshold Range |
-|---|--------|----------|-----------|-----------|-----------------|
-| 1 | Mercury | 1.0 kΩ | 0.45 | ~92 | < 138 |
-| 2 | Venus | 2.2 kΩ | 0.90 | ~184 | 138 – 255 |
-| 3 | Earth | 4.7 kΩ | 1.60 | ~328 | 256 – 419 |
-| 4 | Mars | 10 kΩ | 2.50 | ~511 | 420 – 607 |
-| 5 | Jupiter | 22 kΩ | 3.44 | ~705 | 608 – 764 |
-| 6 | Saturn | 47 kΩ | 4.03 | ~825 | 765 – 876 |
-| 7 | Uranus | 100 kΩ | 4.55 | ~930 | 877 – 952 |
-| 8 | Neptune | 220 kΩ | 4.77 | ~976 | 953 – 994 |
+### Card Resistor Map
 
-> Pull-up = 10 kΩ, VCC = 5 V, 10-bit ADC resolution (~4.9 mV/count).  
-> Software averages 4 samples + 5-reading debounce (~50 ms) for stability.
-
----
-
-## 🖥️ PC Dashboard
-
-A single-file HTML/JS dashboard communicates via **Web Serial API** (Chrome) through a virtual COM port pair.
-
-On receiving a planet ID over UART, the dashboard:
-- Renders an animated **CSS 3D planet** (unique texture; Saturn has rings 🪐)
-- Shows interactive **data cards** (distance, diameter, day length, fun facts)
-- Opens a **Claude AI chat panel** pre-loaded with the planet's context — ask anything in English or Arabic
+| Planet  | Resistor | ADC Range |
+|---------|----------|-----------|
+| Mercury | 1.0 kΩ  | < 138     |
+| Venus   | 2.2 kΩ  | 138–255   |
+| Earth   | 4.7 kΩ  | 256–419   |
+| Mars    | 10 kΩ   | 420–607   |
+| Jupiter | 22 kΩ   | 608–764   |
+| Saturn  | 47 kΩ   | 765–876   |
+| Uranus  | 100 kΩ  | 877–952   |
+| Neptune | 220 kΩ  | 953–994   |
 
 ---
 
-## 🗂️ Repository Structure
+## PC Dashboard
+
+A Python bridge reads the UART stream and forwards it over WebSocket to a local HTML dashboard.
+
+```bash
+pip install pyserial websockets
+python bridge/serial_bridge.py --port COM3 --baud 9600
+```
+
+Open `dashboard/index.html` in Chrome. Enter your Anthropic API key in the AI Assistant panel to enable planet chat.
+
+**UART packet format:**
+```
+PLANET=MARS ADC0=509 ADC1=11 OK
+CARD_REMOVED
+```
+
+---
+
+## Build & Flash
+
+```bash
+avr-gcc -mmcu=atmega8 -DF_CPU=8000000UL -Os -o kawkab.elf firmware/main.c
+avr-objcopy -O ihex kawkab.elf kawkab.hex
+avrdude -c usbasp -p m8 -U flash:w:kawkab.hex
+```
+
+---
+
+## Simulating in Proteus
+
+The full circuit can be validated in **Proteus Design Suite** before physical assembly.
+
+1. **Open the schematic** from `simulation/kawkab.pdsprj`
+2. **Load the hex file** — double-click the ATmega8 component, set *Program File* to `kawkab.hex` and *Clock Frequency* to `8MHz`
+3. **Simulate the LDR** with a potentiometer on ADC1:
+   - High resistance (ADC > 700) → no card
+   - Low resistance (ADC < 300) → card inserted
+4. **Simulate planet cards** with a second potentiometer on ADC0 — dial to each target voltage from the resistor map above
+5. **Check UART output** via the Proteus Virtual Terminal (9600 baud, 8N1) — expect `PLANET=MARS ADC0=... OK` per planet
+6. **Watch the outputs** — the LCD, LED, and buzzer components respond in real time as you adjust the potentiometers
+
+> The state machine requires 5 consecutive stable LDR readings (~50 ms) before transitioning, so hold the potentiometer steady for a moment after adjusting.
+
+---
+
+## Repository Structure
 
 ```
-kawkab/ (working on progress)
-│
-├── firmware/                  # ATmega8 C source (avr-gcc)
-│   ├── main.c                 # Entry point, state machine
-│   ├── adc.c / adc.h          # ADC driver (ADC0 + ADC1)
-│   ├── lcd.c / lcd.h          # 4-bit LCD HD44780 driver
-│   ├── uart.c / uart.h        # UART TX driver @ 9600 baud
-│   ├── buzzer.c / buzzer.h    # Timer2 PWM tone generator
-│   ├── leds.c / leds.h        # RGB LED controller
-│   ├── planets.c / planets.h  # Planet data table + lookup
-│   └── Makefile               # avr-gcc build + avrdude flash
-│
-├── simulation/                # Proteus design files
-│   └── kawkab.pdsprj
-│
-├── dashboard/                 # PC-side HTML dashboard
-│   └── index.html             # Single-file app (Web Serial + Claude API)
-│
-├── cards/                     # Planet card assets
-│   ├── artwork/               # Print-ready card designs (PDF/PNG)
-│   └── resistor_map.md        # Resistor values per planet
-│
-├── docs/                      # Project documentation
-│   ├── proposal.pdf           # Original project proposal
-│   ├── schematic.pdf          # Circuit schematic
-│   └── report.pdf             # Final report (added Week 14)
-│
+kawkab/
+├── firmware/
+│   └── main.c                 # ATmega8 firmware (avr-gcc C)
+├── bridge/
+│   └── serial_bridge.py       # pyserial → WebSocket bridge
+├── dashboard/
+│   └── index.html             # Three.js + Claude AI dashboard
+├── simulation/
+│   └── kawkab.pdsprj          # Proteus Design Suite project
 └── README.md
 ```
 
 ---
 
-## 🚀 Getting Started
+## Team
 
-### Flash the Firmware
-```bash
-cd firmware
-make
-make flash   # requires avrdude + USBasp or compatible programmer
-```
+Ayah Alshanfari · Shahad Al Rubkhi · Hawa Bahashwan
 
-### Run the Dashboard
-1. Open `dashboard/index.html` in **Google Chrome**
-2. Connect the USB-to-TTL converter
-3. Click **Connect** → select the COM port
-4. Insert a planet card and watch the magic ✨
-
----
-
-## 📅 Project Timeline
-
-| Week | Milestone |
-|------|-----------|
-| 9 | Proteus schematic + ADC simulation |
-| 10 | Firmware complete, all 8 planets verified in sim |
-| 11 | Breadboard wiring + card fabrication |
-| 12 | Full integration: card → LCD → UART → dashboard |
-| 13 | Calibration, tone tuning, edge case handling |
-| 14 | Draft report + screenshots + waveforms |
-| 15 | Live demo + final report submission |
-
-
-
----
-
-*"The cosmos is within us. We are made of star-stuff."* — Carl Sagan
+**ECCE4227 Embedded Systems — Spring 2026**  
+Sultan Qaboos University, College of Engineering
